@@ -21,6 +21,10 @@ def train_input_fn(params):
     Returns:
         A tuple containing features and labels.
     """
+    
+    #apply is applying a dataset transformation function on the dataset. 
+    #this allows to create a pipeline of preprocessing steps.
+    
     batch_size = params['batch_size']
     filepath = params['train_filepath']
     feature_names = validate_feature_names(params['feature_names'])

@@ -5,28 +5,33 @@ import tensorflow as tf
 
 logger = logging.getLogger('datasets')
 
+#hereafter, they provide the structure of the tfrecord file of one example
+# this is how they wrote the tfrecord and this is provided so the file can 
+#be read.
+#note that each file contains several examples each is one record. 
 # TFRecords metadata.
 DATASETS_METADATA = {
-    'smiles_character_tokens': tf.FixedLenFeature((158), tf.int64),
-    'smiles_atom_tokens': tf.FixedLenFeature((155), tf.int64),
-    'fingerprints_256': tf.FixedLenFeature((256), tf.int64),
-    'fingerprints_512': tf.FixedLenFeature((512), tf.int64),
-    'targets_10': tf.FixedLenFeature(((10, 1)), tf.float32),
-    'targets_20': tf.FixedLenFeature(((20, 1)), tf.float32),
-    'targets_50': tf.FixedLenFeature(((50, 1)), tf.float32),
-    'selected_genes_10': tf.FixedLenFeature((1121), tf.float32),
-    'selected_genes_20': tf.FixedLenFeature((2128), tf.float32),
-    'cnv_min': tf.FixedLenFeature((2128), tf.int64),
-    'cnv_max': tf.FixedLenFeature((2128), tf.int64),
-    'disrupt': tf.FixedLenFeature((2128), tf.int64),
-    'zigosity': tf.FixedLenFeature((2128), tf.int64),
-    'ic50': tf.FixedLenFeature((), tf.float32),
-    'ic50_labels': tf.FixedLenFeature((), tf.int64),
+    'smiles_character_tokens': tf.io.FixedLenFeature((158), tf.int64),
+    'smiles_atom_tokens': tf.io.FixedLenFeature((155), tf.int64),
+    'fingerprints_256': tf.io.FixedLenFeature((256), tf.int64),
+    'fingerprints_512': tf.io.FixedLenFeature((512), tf.int64),
+    'targets_10': tf.io.FixedLenFeature(((10, 1)), tf.float32),
+    'targets_20': tf.io.FixedLenFeature(((20, 1)), tf.float32),
+    'targets_50': tf.io.FixedLenFeature(((50, 1)), tf.float32),
+    'selected_genes_10': tf.io.FixedLenFeature((1121), tf.float32),
+    'selected_genes_20': tf.io.FixedLenFeature((2128), tf.float32),
+    'cnv_min': tf.io.FixedLenFeature((2128), tf.int64),
+    'cnv_max': tf.io.FixedLenFeature((2128), tf.int64),
+    'disrupt': tf.io.FixedLenFeature((2128), tf.int64),
+    'zigosity': tf.io.FixedLenFeature((2128), tf.int64),
+    'ic50': tf.io.FixedLenFeature((), tf.float32),
+    'ic50_labels': tf.io.FixedLenFeature((), tf.int64)
 }
 
 CNV_FEATURES = ['cnv_min', 'cnv_max', 'disrupt', 'zigosity']
 
-
+#this function opens up one example saved in the binary format of tfrecord.
+#then it pulls the features from the serialized file. it 
 def record_parser(record, params, feature_names):
     """
     Process a record to create input tensors and labels.
