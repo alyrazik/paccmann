@@ -91,6 +91,8 @@ logger = logging.getLogger('training_paccmann')
         'option', 'prefetch_buffer_size', int
     )
 )
+    
+    #note that each model function have different set of allowable features to select from.
 def main(
     train_filepath, eval_filepath,
     model_path, model_specification_fn_name,
@@ -108,18 +110,35 @@ def main(
 ):
     """Run training of a `paccmann` model."""
     try:
-        params = {}
+        params = {} #an empty dictionary
         with open(params_filepath) as fp:
-            params.update(json.load(fp))
+            params.update(json.load(fp)) #now we loaded the model parameters (from MCA.json for example) into the dictionary.
+            
 
-        feature_names = list(set(feature_names.split(',')))
+        feature_names = list(set(feature_names.split(','))) #we supply feature names, separated with commas in the function call
+        # we take them into a list.
+        #next part to attend to special thing regarding cnv. I am not sure what it is.
         if params.get('use_cnv_data', False):
             params.update({key: key for key in CNV_FEATURES})
             feature_names.extend(CNV_FEATURES)
+        #this sorts the list we got for feature names.
         feature_names = sorted(feature_names)
 
         # Check if the model_specification_fn_name requested is available.
-        if model_specification_fn_name not in MODEL_SPECIFICATION_FACTORY:
+        #model specification function is like MCA, rnn for example. since they built a common architecture and used different
+        #encoders 
+        if model_specification_fn_name not in MODEL_SPECIFICATION_FACTORY: #paccmann.models had the value of this constant. 
+            
+            """
+            MODEL_SPECIFICATION_FACTORY = {
+                'dnn': dnn_fn,
+                'rnn': rnn_fn,
+                'scnn': scnn_fn,
+                'sa': sa_fn,
+                'ca': ca_fn,
+                'mca': mca_fn
+}
+            """
             message = (
                 '{} not present. Pick one of the following: {}'.format(
                     model_specification_fn_name,
@@ -128,6 +147,29 @@ def main(
             )
             raise RuntimeError(message)
         # Check feature passed.
+        # below are the list of available features.
+        """
+        # TFRecords metadata.
+        DATASETS_METADATA = {
+                'smiles_character_tokens': tf.FixedLenFeature((158), tf.int64),
+                'smiles_atom_tokens': tf.FixedLenFeature((155), tf.int64),
+                'fingerprints_256': tf.FixedLenFeature((256), tf.int64),
+                'fingerprints_512': tf.FixedLenFeature((512), tf.int64),
+                'targets_10': tf.FixedLenFeature(((10, 1)), tf.float32),
+                'targets_20': tf.FixedLenFeature(((20, 1)), tf.float32),
+                'targets_50': tf.FixedLenFeature(((50, 1)), tf.float32),
+                'selected_genes_10': tf.FixedLenFeature((1121), tf.float32),
+                'selected_genes_20': tf.FixedLenFeature((2128), tf.float32),
+                'cnv_min': tf.FixedLenFeature((2128), tf.int64),
+                'cnv_max': tf.FixedLenFeature((2128), tf.int64),
+                'disrupt': tf.FixedLenFeature((2128), tf.int64),
+                'zigosity': tf.FixedLenFeature((2128), tf.int64),
+                'ic50': tf.FixedLenFeature((), tf.float32),
+                'ic50_labels': tf.FixedLenFeature((), tf.int64),
+            }
+
+        """
+        #below is used to validate the input feature names. 
         if len(feature_names) != len(validate_feature_names(feature_names)):
             message = (
                 'feature_names={} provided not completely supported. Select '
@@ -141,6 +183,10 @@ def main(
             '-'.join(feature_names),
             model_specification_fn_name
         )
+        
+        #model_suffix is a not important details for now :) 9 Dec 2019 by AA.
+        #it is just naming the model so if you'd save several , you'd uniquely name each
+        #to be identifiable (AA Jan 2020)
         if len(model_suffix) < 1:
             model_suffix = '{:%Y-%m-%d_%H:%M:%S}'.format(
                 datetime.now()
@@ -149,7 +195,9 @@ def main(
             model_path,
             '{}_{}'.format(prefix, model_suffix)
         )
+        
         # Parameters.
+        #let's load the model paramteres as specified by the main function inputs. 
         params.update({
             'feature_names': feature_names,
             'batch_size': batch_size,
@@ -165,6 +213,7 @@ def main(
         })
 
         # Optionally update scaling parameters.
+        #they didn't include this .json file and I don't know what it does. (AA) 
         ic50_normalization_params_filepath = os.path.join(
             train_filepath, 'ic50_normalization_params.json'
         )
@@ -172,13 +221,19 @@ def main(
             with open(ic50_normalization_params_filepath) as fp:
                 params.update(json.load(fp))
 
+        #view a message of all model parameters.
         logger.info('Model params:\n{}'.format(params))
         # Check if the feature requested are supported by the model.
+        #collect all string paramters from the params dictionary. 
         string_parameter_values_set = set([
             value
             for value in params.values()
             if isinstance(value, str)
         ])
+        #remeber feature_names are list of supplied features to the main function as input. 
+        #intersection of supplied featue names with list of all model possible featuers 
+        #(params is updated with a specific .json file of the specific model)
+        #should yield all supplied feature names. 
         if (
             len(set(feature_names).intersection(
                 string_parameter_values_set)
@@ -196,13 +251,38 @@ def main(
                 )
             )
             raise RuntimeError(message)
+            
+        #now the rest of the code is doing the actual work..All previous code was...
+        #...attempting to make sure every thing is ready for this.    
+        
         # Define exporter.
+        #exporter exports the estimator 
+        # it returns The string path to the exported directory
+        #the class constructor is takes arguments as such:
+        # __init__(
+        #            name,
+        #            serving_input_receiver_fn,
+        #            assets_extra=None,
+        #            as_text=False,
+        #            exports_to_keep=5
+        #        )
+        """
+        name: unique name of this Exporter that is going to be used in the export path.
+        serving_input_receiver_fn: a function that takes no arguments and returns a ServingInputReceiver.
+        assets_extra: An optional dict specifying how to populate the assets.extra directory within the exported SavedModel. Each key should give the destination path (including the filename) relative to the assets.extra directory. The corresponding value gives the full path of the source file to be copied. For example, the simple case of copying a single file without renaming it is specified as {'my_asset_file.txt': '/path/to/my_asset_file.txt'}.
+        as_text: whether to write the SavedModel proto in text format. Defaults to False.
+        exports_to_keep: Number of exports to keep. Older exports will be garbage-collected. Defaults to 5. Set to None to disable garbage collection.
+        """
+        
+        
+        
         exporter = tf.estimator.LatestExporter(
             '{}_exporter'.format(model_dir),
             lambda: serving_input_with_params_fn(params),
             exports_to_keep=None
         )
         # Define estimator.
+        #takes model function, model directory and params
         estimator = tf.estimator.Estimator(
             model_fn=(
                 lambda features, labels, mode, params: paccmann_model_fn(
